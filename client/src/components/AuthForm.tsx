@@ -58,20 +58,33 @@ export function AuthForm({ mode = "signIn", onSuccess }: AuthFormProps) {
             });
 
             // DECISIVE FIX: Ensure the user doc exists before moving on
-            await ensureMe();
+            let retries = 3;
+            while (retries > 0) {
+                try {
+                    await ensureMe();
+                    break;
+                } catch (err: any) {
+                    if (err.message?.includes("No identity found") && retries > 1) {
+                        retries--;
+                        await new Promise(r => setTimeout(r, 500)); // Wait 500ms
+                        continue;
+                    }
+                    throw err;
+                }
+            }
 
             if (onSuccess) onSuccess();
         } catch (err: any) {
             console.error("Auth error:", err);
-            // Map raw convex errors to friendly messages if possible
-            // Assuming generic catch for now as raw strings vary
-            if (err.message?.includes("Account already exists")) {
+
+            const errorMessage = err.message || "Unknown error";
+
+            if (errorMessage.includes("Account already exists")) {
                 setError(isLogin ? "Account not found or password incorrect." : "Username already taken.");
-            } else if (err.message?.includes("InvalidSecret") || err.message?.includes("Password")) {
+            } else if (errorMessage.includes("InvalidSecret") || errorMessage.includes("Password")) {
                 setError("Incorrect username or password.");
             } else {
-                setError("Authentication failed. Please try again.");
-                console.error(err);
+                setError(`Authentication failed: ${errorMessage}`);
             }
         } finally {
             setLoading(false);

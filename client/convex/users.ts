@@ -59,8 +59,15 @@ async function findOrCreateUser(ctx: QueryCtx | MutationCtx) {
 export const ensureMe = mutation({
     args: {},
     handler: async (ctx) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) {
+            throw new Error("No identity found. Session might not be established yet.");
+        }
+
         const user = await findOrCreateUser(ctx);
-        if (!user) throw new Error("Unauthorized");
+        if (!user) {
+            throw new Error(`Failed to find or create user for subject: ${identity.subject}`);
+        }
         return user;
     },
 });
