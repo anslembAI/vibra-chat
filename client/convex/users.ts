@@ -2,53 +2,6 @@ import { mutation, query, MutationCtx, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 
 /**
- * Public mutation to ensure the user exists after sign-in.
- */
-export const ensureMe = mutation({
-    args: {},
-    handler: async (ctx) => {
-        const identity = await ctx.auth.getUserIdentity();
-        if (!identity) throw new Error("Not authenticated");
-
-        const existing = await ctx.db
-            .query("users")
-            .withIndex("by_authSubject", (q) => q.eq("authSubject", identity.subject))
-            .unique();
-
-        if (existing) return existing;
-
-        const userId = await ctx.db.insert("users", {
-            authSubject: identity.subject,
-            username: identity.email?.split("@")[0] || `user_${identity.subject.slice(0, 8)}`,
-            name: identity.name || identity.email?.split("@")[0],
-            email: identity.email,
-            role: "user",
-            updatedAt: Date.now(),
-        });
-
-        const created = await ctx.db.get(userId);
-        if (!created) throw new Error("Failed to create user profile");
-        return created;
-    },
-});
-
-/**
- * Returns the current authenticated user's profile.
- */
-export const me = query({
-    args: {},
-    handler: async (ctx) => {
-        const identity = await ctx.auth.getUserIdentity();
-        if (!identity) return null;
-
-        return await ctx.db
-            .query("users")
-            .withIndex("by_authSubject", (q) => q.eq("authSubject", identity.subject))
-            .unique();
-    },
-});
-
-/**
  * Strict guard for mutations: returns user or throws.
  */
 export async function requireUser(ctx: MutationCtx | QueryCtx) {
@@ -66,28 +19,46 @@ export async function requireUser(ctx: MutationCtx | QueryCtx) {
     return user;
 }
 
-/**
- * Internal helper for other mutations to get the current user.
- */
-export async function getOrCreateUser(ctx: MutationCtx) {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
+export const ensureMe = mutation({
+    args: {},
+    handler: async (ctx) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) throw new Error("Not authenticated");
 
-    const existing = await ctx.db
-        .query("users")
-        .withIndex("by_authSubject", (q) => q.eq("authSubject", identity.subject))
-        .unique();
+        const authSubject = identity.subject;
 
-    if (existing) return existing;
+        const existing = await ctx.db
+            .query("users")
+            .withIndex("by_authSubject", (q) => q.eq("authSubject", authSubject))
+            .unique();
 
-    // Creation logic duplicated for standalone mutation safety
-    const userId = await ctx.db.insert("users", {
-        authSubject: identity.subject,
-        username: identity.email?.split("@")[0] || `user_${identity.subject.slice(0, 8)}`,
-        name: identity.name || identity.email?.split("@")[0],
-        email: identity.email,
-        role: "user",
-        updatedAt: Date.now(),
-    });
-    return await ctx.db.get(userId);
-}
+        if (existing) return existing;
+
+        const email = String(identity.email ?? "").trim().toLowerCase();
+        const name = String(identity.name ?? email.split("@")[0] ?? "User");
+
+        const userId = await ctx.db.insert("users", {
+            authSubject,
+            email,
+            name,
+            role: "user",
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+        });
+
+        return await ctx.db.get(userId);
+    },
+});
+
+export const me = query({
+    args: {},
+    handler: async (ctx) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) return null;
+
+        return await ctx.db
+            .query("users")
+            .withIndex("by_authSubject", (q) => q.eq("authSubject", identity.subject))
+            .unique();
+    },
+});

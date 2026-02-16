@@ -19,6 +19,7 @@ export default defineSchema({
         // If user wants explicit fields, I can add them but Convex handles creation time.
         // I will add updatedAt as requested for users/messages if needed, but usually redundant.
         updatedAt: v.optional(v.number()),
+        createdAt: v.optional(v.number()),
     })
         .index("email", ["email"])
         .index("by_username", ["username"])

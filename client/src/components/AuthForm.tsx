@@ -56,11 +56,13 @@ export function AuthForm({ mode = "signIn", onSuccess }: AuthFormProps) {
 
         try {
             const flow = isLogin ? "signIn" : "signUp";
-            await signIn("password", {
-                email: formData.email,
-                password: formData.password,
-                flow
-            });
+
+            const form = new FormData();
+            form.set("email", formData.email);
+            form.set("password", formData.password);
+            form.set("flow", flow);
+
+            await signIn("password", form);
 
             // REQUIRED: Ensure the user doc exists before redirecting
             await ensureMe();
