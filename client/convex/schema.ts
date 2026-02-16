@@ -5,25 +5,16 @@ import { v } from "convex/values";
 export default defineSchema({
     ...authTables,
     users: defineTable({
-        name: v.optional(v.string()),
-        image: v.optional(v.string()),
-        email: v.optional(v.string()),
-        username: v.optional(v.string()), // Added for explicit username storage
-        authSubject: v.optional(v.string()), // Added as requested
-        role: v.optional(v.union(v.literal("user"), v.literal("admin"), v.literal("moderator"))),
-        emailVerificationTime: v.optional(v.number()),
-        phone: v.optional(v.string()),
-        phoneVerificationTime: v.optional(v.number()),
-        isAnonymous: v.optional(v.boolean()),
-        // Timestamps are automatic via _creationTime, but requested explicitly? No, _creationTime is standard.
-        // If user wants explicit fields, I can add them but Convex handles creation time.
-        // I will add updatedAt as requested for users/messages if needed, but usually redundant.
-        updatedAt: v.optional(v.number()),
-        createdAt: v.optional(v.number()),
+        authSubject: v.string(),
+        email: v.string(),
+        name: v.string(),
+        role: v.union(v.literal("admin"), v.literal("moderator"), v.literal("user")),
+        createdAt: v.number(),
+        updatedAt: v.number(),
+        image: v.optional(v.string()), // Kept for UI avatars
     })
-        .index("email", ["email"])
-        .index("by_username", ["username"])
-        .index("by_authSubject", ["authSubject"]),
+        .index("by_authSubject", ["authSubject"])
+        .index("by_email", ["email"]),
 
     channels: defineTable({
         name: v.string(),
