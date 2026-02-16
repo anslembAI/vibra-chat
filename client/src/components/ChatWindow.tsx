@@ -12,16 +12,15 @@ interface ChatProps {
 
 export function ChatWindow({ username, room, currentUser }: ChatProps) {
     const [currentMessage, setCurrentMessage] = useState("");
-    const messageList = useQuery(api.messages.list, { room }) || [];
+    const messageList = useQuery(api.messages.list, { channelName: room }) || [];
     const sendMessageMutation = useMutation(api.messages.send);
 
     const sendMessage = async () => {
         if (currentMessage !== "") {
             await sendMessageMutation({
-                room: room,
-                author: username,
-                message: currentMessage,
-                time: new Date(Date.now()).getHours() + ":" + new Date(Date.now()).getMinutes(),
+                channelName: room,
+                body: currentMessage,
+                format: "text",
             });
             setCurrentMessage("");
         }
@@ -55,29 +54,35 @@ export function ChatWindow({ username, room, currentUser }: ChatProps) {
                     <div className="flex flex-col gap-6 py-4">
                         {messageList.map((msg, index) => {
                             const isMe = username === msg.author;
-                            // Mock avatar for other user if not present
-                            const avatar = isMe
-                                ? "https://i.pravatar.cc/150?u=me"
-                                : (currentUser?.avatar || "https://i.pravatar.cc/150?u=other");
+                            // Note: username prop is "Me" or currentUser.name. 
+                            // Using msg.author from backend is reliable.
+                            // However, we need to know who "I" am to align right.
+                            // The backend returns msg.author as Name.
+                            // We should probably rely on userId comparison if we had my userId here.
+                            // But ChatWindow receives "username". In ChatPage, it passed `me.name`.
+                            // So `isMe` checks name equality.
 
                             return (
                                 <div key={index} className={`flex gap-4 ${isMe ? "justify-end" : "justify-start"}`}>
                                     {!isMe && (
-                                        <img src={avatar} alt={msg.author} className="w-8 h-8 rounded-full object-cover mt-1" />
+                                        <img src={msg.avatar} alt={msg.author} className="w-8 h-8 rounded-full object-cover mt-1" />
                                     )}
 
                                     <div className={`flex flex-col max-w-[60%] ${isMe ? "items-end" : "items-start"}`}>
+                                        {/* Author Name for group chats? Optional */}
+                                        {!isMe && <span className="text-xs text-gray-500 mb-1 ml-1">{msg.author}</span>}
+
                                         <div className={`p-4 rounded-2xl text-sm leading-relaxed shadow-lg ${isMe
                                             ? "bg-purple-600/20 border border-purple-500/30 text-white rounded-tr-none"
                                             : "bg-[#282830] text-gray-200 rounded-tl-none border border-white/5"
                                             }`}>
-                                            {msg.message}
+                                            {msg.body}
                                         </div>
                                         <span className="text-xs text-gray-500 mt-1 px-1">{msg.time}</span>
                                     </div>
 
                                     {isMe && (
-                                        <img src={avatar} alt={msg.author} className="w-8 h-8 rounded-full object-cover mt-1" />
+                                        <img src={msg.avatar} alt={msg.author} className="w-8 h-8 rounded-full object-cover mt-1" />
                                     )}
                                 </div>
                             );
