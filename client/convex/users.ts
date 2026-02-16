@@ -1,19 +1,15 @@
-import { query, QueryCtx, MutationCtx } from "./_generated/server";
+import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { auth } from "./auth";
 
 /**
- * Helper to ensure user exists. 
- * Note: With @convex-dev/auth, getUserId() usually returns the ID of a 'users' doc.
- * However, if we need to robustly map identity to user for external auth, we use strict checks.
- * Here we follow the requested logic using getUserIdentity.
+ * Internal helper to find or create a user based on the current auth identity.
  */
-export async function getOrCreateUser(ctx: QueryCtx | MutationCtx) {
+async function findOrCreateUser(ctx: QueryCtx | MutationCtx) {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
 
-    // 1. Try to find user by authSubject (if populated)
-    // Note: identity.subject is usually the unique ID from the provider.
+    // 1. Try to find user by authSubject
     const userBySubject = await ctx.db
         .query("users")
         .withIndex("by_authSubject", (q) => q.eq("authSubject", identity.subject))
@@ -21,37 +17,35 @@ export async function getOrCreateUser(ctx: QueryCtx | MutationCtx) {
 
     if (userBySubject) return userBySubject;
 
-    // 2. Fallback: If using convex-dev/auth, identity.subject MIGHT be the user ID if configured that way,
-    // but usually it is the PROVIDER's subject. 
-    // If we are here, and using Password auth, maybe we rely on getUserId?
-    const userId = await auth.getUserId(ctx);
-    if (userId) {
-        const user = await ctx.db.get(userId);
-        if (user) {
-            // Optional: Backfill authSubject if missing?
-            // await ctx.db.patch(userId, { authSubject: identity.subject });
-            return user;
+    // 2. Try to find by email/username as fallback (identity.email is our username)
+    if (identity.email) {
+        const userByEmail = await ctx.db
+            .query("users")
+            .withIndex("email", (q) => q.eq("email", identity.email))
+            .first();
+
+        if (userByEmail) {
+            // Link this user to the authSubject for future lookups
+            const db = ctx.db as any;
+            if (db.patch) {
+                await db.patch(userByEmail._id, { authSubject: identity.subject });
+            }
+            return userByEmail;
         }
     }
 
-    // 3. Create if missing (Only valid in Mutation)
-    // Check if we are in a mutation context by checking for 'insert'
+    // 3. Create if missing (Only if in mutation context)
     const db = ctx.db as any;
-    if (db.insert && identity) {
-        // We are in a mutation, we can create the user
-        // Ensure username is set
-        const username = identity.name || identity.email || `user_${Date.now()}`;
-
-        // Check if username is taken? If so, we might fail or append
-        // But let's assume unique for now or let db throw
+    if (db.insert) {
+        const username = identity.name || identity.email || `user_${Math.floor(Math.random() * 1000000)}`;
         const newUserId = await db.insert("users", {
             name: identity.name,
-            username: username, // Use name as username? Or email? Identity from Password provider has name=username.
+            username: username,
             email: identity.email,
             role: "user",
             authSubject: identity.subject,
             image: identity.pictureUrl,
-            // createdAt: Date.now(), // Convex handles _creationTime
+            updatedAt: Date.now(),
         });
         return await ctx.db.get(newUserId);
     }
@@ -60,12 +54,30 @@ export async function getOrCreateUser(ctx: QueryCtx | MutationCtx) {
 }
 
 /**
+ * Public mutation to ensure the user exists after sign-in.
+ */
+export const ensureMe = mutation({
+    args: {},
+    handler: async (ctx) => {
+        const user = await findOrCreateUser(ctx);
+        if (!user) throw new Error("Unauthorized");
+        return user;
+    },
+});
+
+/**
  * Returns the current user's full profile document or null if not authenticated.
  */
 export const current = query({
     args: {},
     handler: async (ctx) => {
-        return await getOrCreateUser(ctx);
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) return null;
+
+        return await ctx.db
+            .query("users")
+            .withIndex("by_authSubject", (q) => q.eq("authSubject", identity.subject))
+            .unique();
     },
 });
 
@@ -81,3 +93,10 @@ export const getByAuthSubject = query({
             .first();
     },
 });
+
+/**
+ * Backend-only helper for mutations to get the current user.
+ */
+export async function getOrCreateUser(ctx: MutationCtx) {
+    return await findOrCreateUser(ctx);
+}

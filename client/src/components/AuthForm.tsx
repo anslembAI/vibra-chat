@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
+import { useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
 import { User, Lock, Eye, EyeOff, Loader2, ArrowRight } from "lucide-react";
 
 interface AuthFormProps {
@@ -9,6 +11,7 @@ interface AuthFormProps {
 
 export function AuthForm({ mode = "signIn", onSuccess }: AuthFormProps) {
     const { signIn } = useAuthActions();
+    const ensureMe = useMutation(api.users.ensureMe);
     const [isLogin, setIsLogin] = useState(mode === "signIn");
     const [formData, setFormData] = useState({
         username: "",
@@ -53,6 +56,10 @@ export function AuthForm({ mode = "signIn", onSuccess }: AuthFormProps) {
                 password: formData.password,
                 flow
             });
+
+            // DECISIVE FIX: Ensure the user doc exists before moving on
+            await ensureMe();
+
             if (onSuccess) onSuccess();
         } catch (err: any) {
             console.error("Auth error:", err);
