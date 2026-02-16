@@ -13,6 +13,8 @@ export const { auth, signIn, signOut, store } = convexAuth({
                     email,
                     name,
                     role: "user",
+                    isAdmin: false,
+                    createdAt: Date.now(),
                 };
             },
         }),
