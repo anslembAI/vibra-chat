@@ -27,12 +27,18 @@ export function ChatPage() {
 
     const activeUser = users.find(u => u.id === activeUserId) || users[0];
 
+    // Handle initial loading
     if (me === undefined) {
         return (
             <div className="flex h-screen w-full bg-[#0f0f13] items-center justify-center text-white">
-                Loading...
+                <Loader />
             </div>
         );
+    }
+
+    // Handle creating/missing profile
+    if (me === null) {
+        return <div className="p-10 text-white">Profile not found. Please log in again.</div>;
     }
 
     return (
@@ -42,18 +48,22 @@ export function ChatPage() {
 
             {/* Main Chat Area */}
             <ChatWindow
-                username={me?.name || "Me"} // Use real username if available
+                username={(me as any).name || (me as any).email || "Me"}
                 room="General"
-                currentUser={activeUser} // The person we are chatting with
+                currentUser={activeUser}
             />
 
             {/* Right Panel */}
             <RightPanel
                 currentUser={activeUser}
-                isAuthenticated={true} // Always true in ChatPage
+                isAuthenticated={true}
                 onSignOut={signOut}
-                onSignIn={() => { }} // No-op
+                onSignIn={() => { }}
             />
         </div>
     );
+}
+
+function Loader() {
+    return <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>;
 }
