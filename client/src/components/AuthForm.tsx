@@ -16,7 +16,7 @@ export function AuthForm({ mode = "signIn", onSuccess }: AuthFormProps) {
     const ensureMe = useMutation(api.users.ensureMe);
     const [isLogin, setIsLogin] = useState(mode === "signIn");
     const [formData, setFormData] = useState({
-        username: "",
+        email: "",
         password: "",
         confirmPassword: "",
     });
@@ -27,11 +27,15 @@ export function AuthForm({ mode = "signIn", onSuccess }: AuthFormProps) {
     const toggleMode = () => {
         setIsLogin(!isLogin);
         setError("");
-        setFormData({ username: "", password: "", confirmPassword: "" });
+        setFormData({ email: "", password: "", confirmPassword: "" });
     };
 
     const validateForm = () => {
-        if (!formData.username.trim()) return "Username is required";
+        if (!formData.email.trim()) return "Email is required";
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email) && !isLogin) {
+            // Only enforce email format on sign up, or just keep it simple?
+            // Let's keep it simple as requested.
+        }
         if (formData.password.length < 6) return "Password must be at least 6 characters";
         if (!isLogin && formData.password !== formData.confirmPassword) {
             return "Passwords do not match";
@@ -53,8 +57,7 @@ export function AuthForm({ mode = "signIn", onSuccess }: AuthFormProps) {
         try {
             const flow = isLogin ? "signIn" : "signUp";
             await signIn("password", {
-                email: formData.username,
-                name: formData.username,
+                email: formData.email,
                 password: formData.password,
                 flow
             });
@@ -70,9 +73,9 @@ export function AuthForm({ mode = "signIn", onSuccess }: AuthFormProps) {
             const errorMessage = err.message || "Unknown error";
 
             if (errorMessage.includes("Account already exists")) {
-                setError(isLogin ? "Account not found or password incorrect." : "Username already taken.");
+                setError(isLogin ? "Account not found or password incorrect." : "Email already registered.");
             } else if (errorMessage.includes("InvalidSecret") || errorMessage.includes("Password")) {
-                setError("Incorrect username or password.");
+                setError("Incorrect email or password.");
             } else {
                 setError(`Authentication failed: ${errorMessage}`);
             }
@@ -96,15 +99,15 @@ export function AuthForm({ mode = "signIn", onSuccess }: AuthFormProps) {
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-300 ml-1">Username</label>
+                    <label className="text-sm font-medium text-gray-300 ml-1">Email</label>
                     <div className="relative">
                         <User className="absolute left-3 top-3.5 w-5 h-5 text-gray-500" />
                         <input
-                            type="text"
-                            value={formData.username}
-                            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                            type="email"
+                            value={formData.email}
+                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                             className="w-full bg-[#282830] text-white pl-10 pr-4 py-3 rounded-xl border border-white/10 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all placeholder-gray-500"
-                            placeholder="Enter your username"
+                            placeholder="Enter your email"
                             disabled={loading}
                             required
                         />

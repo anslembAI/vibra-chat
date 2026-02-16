@@ -19,11 +19,11 @@ export const ensureMe = mutation({
 
         const userId = await ctx.db.insert("users", {
             authSubject: identity.subject,
-            username: `user_${identity.subject.slice(0, 8)}`,
+            username: identity.email?.split("@")[0] || `user_${identity.subject.slice(0, 8)}`,
+            name: identity.name || identity.email?.split("@")[0],
+            email: identity.email,
             role: "user",
             updatedAt: Date.now(),
-            // name: identity.name, // Added for basic data sync
-            // email: identity.email, // Added for basic data sync
         });
 
         const created = await ctx.db.get(userId);
@@ -83,7 +83,9 @@ export async function getOrCreateUser(ctx: MutationCtx) {
     // Creation logic duplicated for standalone mutation safety
     const userId = await ctx.db.insert("users", {
         authSubject: identity.subject,
-        username: `user_${identity.subject.slice(0, 8)}`,
+        username: identity.email?.split("@")[0] || `user_${identity.subject.slice(0, 8)}`,
+        name: identity.name || identity.email?.split("@")[0],
+        email: identity.email,
         role: "user",
         updatedAt: Date.now(),
     });
