@@ -26,7 +26,7 @@ export function AuthDialog({ isOpen, onClose }: AuthDialogProps) {
             const flow = isLogin ? "signIn" : "signUp";
             // Using "password" provider which handles both creating users (signUp) and logging them in (signIn)
             // Note: "Password" is the ID of the provider we configured in convex/auth.ts
-            await signIn("password", { email: username, password, flow });
+            await signIn("password", { email: username, name: username, password, flow });
             onClose();
         } catch (err: any) {
             console.error(err);
