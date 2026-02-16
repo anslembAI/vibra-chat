@@ -58,12 +58,13 @@ export function AuthForm({ mode = "signIn", onSuccess }: AuthFormProps) {
             console.error("Auth error:", err);
             // Map raw convex errors to friendly messages if possible
             // Assuming generic catch for now as raw strings vary
-            if (err.message?.includes("Account")) {
-                setError(isLogin ? "Account not found." : "Username already taken.");
-            } else if (err.message?.includes("Password")) {
-                setError("Incorrect password.");
+            if (err.message?.includes("Account already exists")) {
+                setError(isLogin ? "Account not found or password incorrect." : "Username already taken.");
+            } else if (err.message?.includes("InvalidSecret") || err.message?.includes("Password")) {
+                setError("Incorrect username or password.");
             } else {
                 setError("Authentication failed. Please try again.");
+                console.error(err);
             }
         } finally {
             setLoading(false);
