@@ -5,13 +5,14 @@ import { v } from "convex/values";
 export default defineSchema({
     ...authTables,
     users: defineTable({
-        authSubject: v.string(),
-        email: v.string(),
-        name: v.string(),
-        role: v.union(v.literal("admin"), v.literal("moderator"), v.literal("user")),
-        createdAt: v.number(),
-        updatedAt: v.number(),
-        image: v.optional(v.string()), // Kept for UI avatars
+        authSubject: v.optional(v.string()),
+        email: v.optional(v.string()),
+        name: v.optional(v.string()),
+        role: v.optional(v.union(v.literal("admin"), v.literal("moderator"), v.literal("user"))),
+        createdAt: v.optional(v.number()),
+        updatedAt: v.optional(v.number()),
+        image: v.optional(v.string()),
+        username: v.optional(v.string()), // Added back as optional to handle existing data
     })
         .index("by_authSubject", ["authSubject"])
         .index("by_email", ["email"]),
