@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
 import { RightPanel } from './components/RightPanel';
 import { AuthDialog } from './components/AuthDialog';
+import { SplashScreen } from './components/SplashScreen';
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth } from "convex/react";
 import './App.css';
@@ -10,8 +11,17 @@ import './App.css';
 function App() {
   const [activeUserId, setActiveUserId] = useState(1);
   const [showAuth, setShowAuth] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
   const { isAuthenticated } = useConvexAuth();
   const { signOut } = useAuthActions();
+
+  // Handle splash screen timer
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Get current active user details for the panels
   const users = [
@@ -24,6 +34,10 @@ function App() {
   ];
 
   const activeUser = users.find(u => u.id === activeUserId) || users[0];
+
+  if (showSplash) {
+    return <SplashScreen />;
+  }
 
   return (
     <div className="flex h-screen w-full bg-[#0f0f13] overflow-hidden font-sans text-white">
