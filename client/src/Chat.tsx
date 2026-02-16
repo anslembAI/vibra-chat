@@ -40,6 +40,16 @@ function Chat({ socket, username, room }: ChatProps) {
         socket.off("receive_message").on("receive_message", (data: MessageData) => {
             setMessageList((list) => [...list, data]);
         });
+
+        socket.off("history").on("history", (data: MessageData[]) => {
+            console.log("History received:", data);
+            setMessageList(data);
+        });
+
+        return () => {
+            socket.off("receive_message");
+            socket.off("history");
+        };
     }, [socket]);
 
     return (
@@ -62,8 +72,8 @@ function Chat({ socket, username, room }: ChatProps) {
                                 <div className={`max-w-[70%] flex flex-col ${isMe ? "items-end" : "items-start"}`}>
                                     <div
                                         className={`message-content p-3 rounded-lg text-sm break-words ${isMe
-                                                ? "bg-purple-600 text-white rounded-tr-none"
-                                                : "bg-gray-700 text-gray-200 rounded-tl-none"
+                                            ? "bg-purple-600 text-white rounded-tr-none"
+                                            : "bg-gray-700 text-gray-200 rounded-tl-none"
                                             }`}
                                     >
                                         <p>{messageContent.message}</p>

@@ -17,44 +17,55 @@ const io = new Server(server, {
     }
 });
 
-// Convex Client (if using Node.js client)
-// We'll use HTTP fetch for simplicity if convex-node isn't fully set up,
-// or just placeholder logic for now.
-// To use Convex from Node:
-// 1. npm install convex
-// 2. const { ConvexHttpClient } = require("convex/browser");
-// 3. const client = new ConvexHttpClient(process.env.CONVEX_URL);
+// Convex Client
+const { ConvexHttpClient } = require("convex/browser");
 
-// In-memory store fallback if Convex not configured
-let matchHistory = [];
+const client = new ConvexHttpClient(process.env.CONVEX_URL);
+
+// Mock API object for function references since we can't easily import the generated one from client
+const api = {
+    messages: {
+        list: "messages:list",
+        send: "messages:send"
+    }
+};
 
 io.on('connection', (socket) => {
     console.log(`User Connected: ${socket.id}`);
 
-    // Send history on connection
-    socket.emit('history', matchHistory);
+    socket.on('join_room', async (room) => {
+        socket.join(room);
+        console.log(`User with ID: ${socket.id} joined room: ${room}`);
 
-    socket.on('join_room', (data) => {
-        socket.join(data);
-        console.log(`User with ID: ${socket.id} joined room: ${data}`);
+        // Fetch directly from Convex
+        try {
+            const messages = await client.query(api.messages.list, { room });
+            socket.emit('history', messages);
+        } catch (err) {
+            console.error("Error fetching history:", err);
+            // Fallback or empty
+            socket.emit('history', []);
+        }
     });
 
     socket.on('send_message', async (data) => {
         // data: { room, author, message, time }
         console.log('Message received:', data);
 
-        // Save to Convex here
-        // await client.mutation("messages:send", { ...data });
+        try {
+            // Save to Convex
+            await client.mutation(api.messages.send, data);
+        } catch (err) {
+            console.error("Error saving message:", err);
+        }
 
-        // For now, push to local history
-        matchHistory.push(data);
-
-        // Broadcast to room
+        // Broadcast to room (including sender if they rely on this for UI update, 
+        // though usually sender updates optimistically. Our React code updates optimistically 
+        // AND listens, which might cause dupe if not careful. 
+        // The React code: setMessageList((list) => [...list, messageData]); when sending.
+        // And listens to 'receive_message'.
+        // So we should broadcast with `socket.to(data.room)` which excludes sender.
         socket.to(data.room).emit('receive_message', data);
-        // Also emit back to sender? Usually sender updates optimistically.
-        // Or we emit to everyone including sender:
-        // io.in(data.room).emit('receive_message', data); 
-        // Socket.io 'to' excludes sender.
     });
 
     socket.on('disconnect', () => {
