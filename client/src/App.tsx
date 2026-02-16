@@ -1,67 +1,65 @@
-import { useState, useEffect } from 'react';
-import { Sidebar } from './components/Sidebar';
-import { ChatWindow } from './components/ChatWindow';
-import { RightPanel } from './components/RightPanel';
-import { AuthDialog } from './components/AuthDialog';
-import { SplashScreen } from './components/SplashScreen';
-import { useAuthActions } from "@convex-dev/auth/react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthPage } from "./pages/AuthPage";
+import { ChatPage } from "./pages/ChatPage";
 import { useConvexAuth } from "convex/react";
-import './App.css';
+import { SplashScreen } from "./components/SplashScreen";
+import { useState, useEffect } from "react";
+
+function LoadingScreen() {
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-[#0f0f13] text-white">
+      <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+    </div>
+  );
+}
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  if (isLoading) return <LoadingScreen />;
+  if (!isAuthenticated) return <Navigate to="/auth" replace />;
+  return <>{children}</>;
+}
+
+function PublicRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  if (isLoading) return <LoadingScreen />;
+  if (isAuthenticated) return <Navigate to="/app" replace />;
+  return <>{children}</>;
+}
 
 function App() {
-  const [activeUserId, setActiveUserId] = useState(1);
-  const [showAuth, setShowAuth] = useState(false);
+  // Show splash once on initial load
   const [showSplash, setShowSplash] = useState(true);
-  const { isAuthenticated } = useConvexAuth();
-  const { signOut } = useAuthActions();
 
-  // Handle splash screen timer
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowSplash(false);
-    }, 2500);
+    const timer = setTimeout(() => setShowSplash(false), 2500);
     return () => clearTimeout(timer);
   }, []);
 
-  // Get current active user details for the panels
-  const users = [
-    { id: 1, name: "Caroline Gray", status: "Online", avatar: "https://i.pravatar.cc/150?u=1" },
-    { id: 2, name: "Matthew Walker", status: "Online", avatar: "https://i.pravatar.cc/150?u=2" },
-    { id: 3, name: "Carmen Jacobson", status: "Online", avatar: "https://i.pravatar.cc/150?u=3" },
-    { id: 4, name: "Presley Martin", status: "Online", avatar: "https://i.pravatar.cc/150?u=4" },
-    { id: 5, name: "Alexander Wilson", status: "Offline", avatar: "https://i.pravatar.cc/150?u=5" },
-    { id: 6, name: "Samuel White", status: "Offline", avatar: "https://i.pravatar.cc/150?u=6" },
-  ];
-
-  const activeUser = users.find(u => u.id === activeUserId) || users[0];
-
-  if (showSplash) {
-    return <SplashScreen />;
-  }
+  if (showSplash) return <SplashScreen />;
 
   return (
-    <div className="flex h-screen w-full bg-[#0f0f13] overflow-hidden font-sans text-white">
-      {/* Sidebar */}
-      <Sidebar activeUser={activeUserId} setActiveUser={setActiveUserId} />
-
-      {/* Main Chat Area */}
-      <ChatWindow
-        username="Me"
-        room="General"
-        currentUser={activeUser}
-      />
-
-
-      {/* Right Panel */}
-      <RightPanel
-        currentUser={activeUser}
-        isAuthenticated={isAuthenticated}
-        onSignOut={signOut}
-        onSignIn={() => setShowAuth(true)}
-      />
-
-      <AuthDialog isOpen={showAuth} onClose={() => setShowAuth(false)} />
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Navigate to="/auth" replace />} />
+        <Route
+          path="/auth"
+          element={
+            <PublicRoute>
+              <AuthPage />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/app/*"
+          element={
+            <ProtectedRoute>
+              <ChatPage />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
