@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { auth } from "./auth";
-import { getOrCreateUser } from "./users";
+import { requireUser } from "./users";
 
 export const list = query({
     args: { channelName: v.optional(v.string()) },
@@ -48,9 +48,8 @@ export const send = mutation({
         format: v.optional(v.union(v.literal("text"), v.literal("image")))
     },
     handler: async (ctx, args) => {
-        // 1. Get current user
-        const user = await getOrCreateUser(ctx);
-        if (!user) throw new Error("Unauthorized");
+        // 1. Get current user (strict guard)
+        const user = await requireUser(ctx);
         const userId = user._id;
 
         // 2. Resolve or Create Channel

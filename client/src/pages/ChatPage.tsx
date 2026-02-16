@@ -6,10 +6,11 @@ import { RightPanel } from "../components/RightPanel";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useAuthActions } from "@convex-dev/auth/react";
+import { AuthPage } from "./AuthPage";
 
 export function ChatPage() {
     const { signOut } = useAuthActions();
-    const me = useQuery(api.users.current);
+    const me = useQuery(api.users.me);
 
     // State for active conversation (mock user ID for now)
     const [activeUserId, setActiveUserId] = useState(1);
@@ -27,19 +28,12 @@ export function ChatPage() {
 
     const activeUser = users.find(u => u.id === activeUserId) || users[0];
 
-    // Handle initial loading
-    if (me === undefined) {
-        return (
-            <div className="flex h-screen w-full bg-[#0f0f13] items-center justify-center text-white">
-                <Loader />
-            </div>
-        );
-    }
+    // Pattern-based guards
+    if (me === undefined) return null; // loading
+    if (me === null) return <AuthPage />; // not signed in/profile missing
 
-    // Handle creating/missing profile
-    if (me === null) {
-        return <div className="p-10 text-white">Profile not found. Please log in again.</div>;
-    }
+    // safe now
+    // me._id is available
 
     return (
         <div className="flex h-screen w-full bg-[#0f0f13] overflow-hidden font-sans text-white">
@@ -48,7 +42,7 @@ export function ChatPage() {
 
             {/* Main Chat Area */}
             <ChatWindow
-                username={(me as any).name || (me as any).email || "Me"}
+                username={me.name || me.email || "Me"}
                 room="General"
                 currentUser={activeUser}
             />
@@ -62,8 +56,4 @@ export function ChatPage() {
             />
         </div>
     );
-}
-
-function Loader() {
-    return <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>;
 }

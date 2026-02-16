@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -10,6 +11,7 @@ interface AuthFormProps {
 }
 
 export function AuthForm({ mode = "signIn", onSuccess }: AuthFormProps) {
+    const navigate = useNavigate();
     const { signIn } = useAuthActions();
     const ensureMe = useMutation(api.users.ensureMe);
     const [isLogin, setIsLogin] = useState(mode === "signIn");
@@ -57,23 +59,11 @@ export function AuthForm({ mode = "signIn", onSuccess }: AuthFormProps) {
                 flow
             });
 
-            // DECISIVE FIX: Ensure the user doc exists before moving on
-            let retries = 3;
-            while (retries > 0) {
-                try {
-                    await ensureMe();
-                    break;
-                } catch (err: any) {
-                    if (err.message?.includes("No identity found") && retries > 1) {
-                        retries--;
-                        await new Promise(r => setTimeout(r, 500)); // Wait 500ms
-                        continue;
-                    }
-                    throw err;
-                }
-            }
+            // REQUIRED: Ensure the user doc exists before redirecting
+            await ensureMe();
 
             if (onSuccess) onSuccess();
+            navigate("/app");
         } catch (err: any) {
             console.error("Auth error:", err);
 
