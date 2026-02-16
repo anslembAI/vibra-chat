@@ -72,9 +72,9 @@ export const send = mutation({
 
         // 3. Insert Message
         await ctx.db.insert("messages", {
-            userId,
+            userId: userId as any,
             body: args.body,
-            channelId: channel!._id,
+            channelId: channel!._id as any,
             format: args.format,
         });
     },
