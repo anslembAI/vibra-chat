@@ -9,14 +9,14 @@ export const list = query({
         const channelName = args.channelName || "General";
         const channel = await ctx.db
             .query("channels")
-            .withIndex("name", (q) => q.eq("name", channelName))
+            .withIndex("by_name", (q) => q.eq("name", channelName))
             .unique();
 
         if (!channel) return [];
 
         const messages = await ctx.db
             .query("messages")
-            .withIndex("channelId", (q) => q.eq("channelId", channel._id))
+            .withIndex("by_channelId", (q) => q.eq("channelId", channel._id))
             .collect();
 
         // Get unique user IDs
@@ -30,11 +30,11 @@ export const list = query({
             const user = userMap.get(msg.userId);
             return {
                 _id: msg._id,
-                body: msg.body,
+                content: msg.content,
                 userId: msg.userId,
-                author: user?.name || "Unknown",
-                avatar: user?.image || "https://i.pravatar.cc/150?u=unknown",
-                format: msg.format || "text",
+                author: user?.name || user?.username || "Unknown",
+                avatar: user?.imageUrl || "https://i.pravatar.cc/150?u=unknown",
+                type: msg.type || "text",
                 time: new Date(msg._creationTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
         });
@@ -43,9 +43,9 @@ export const list = query({
 
 export const send = mutation({
     args: {
-        body: v.string(),
+        content: v.string(),
         channelName: v.string(), // Send by name for frontend convenience
-        format: v.optional(v.union(v.literal("text"), v.literal("image")))
+        type: v.optional(v.union(v.literal("text"), v.literal("poll")))
     },
     handler: async (ctx, args) => {
         // 1. Get current user (strict guard)
@@ -55,7 +55,7 @@ export const send = mutation({
         // 2. Resolve or Create Channel
         let channel = await ctx.db
             .query("channels")
-            .withIndex("name", (q) => q.eq("name", args.channelName))
+            .withIndex("by_name", (q) => q.eq("name", args.channelName))
             .first();
 
         if (!channel) {
@@ -63,18 +63,22 @@ export const send = mutation({
             // For now, auto-create.
             const channelId = await ctx.db.insert("channels", {
                 name: args.channelName,
-                type: "public",
+                type: "chat",
                 description: "Auto-created channel",
+                createdBy: userId,
+                createdAt: Date.now(),
             });
-            channel = { _id: channelId } as any; // Type-casting for convenience
+            channel = (await ctx.db.get(channelId))!;
         }
 
         // 3. Insert Message
         await ctx.db.insert("messages", {
-            userId: userId as any,
-            body: args.body,
-            channelId: channel!._id as any,
-            format: args.format,
+            userId: userId,
+            content: args.content,
+            channelId: channel!._id,
+            type: args.type || "text",
+            timestamp: Date.now(),
+            edited: false,
         });
     },
 });

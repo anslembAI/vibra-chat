@@ -42,6 +42,7 @@ export const ensureMe = mutation({
             email,
             name,
             role: "user",
+            isAdmin: false,
             createdAt: Date.now(),
             updatedAt: Date.now(),
         });

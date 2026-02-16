@@ -1,42 +1,329 @@
-import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
-    ...authTables,
     users: defineTable({
         authSubject: v.optional(v.string()),
-        email: v.optional(v.string()),
-        name: v.optional(v.string()),
-        role: v.optional(v.union(v.literal("admin"), v.literal("moderator"), v.literal("user"))),
-        createdAt: v.optional(v.number()),
+        username: v.optional(v.string()),
+        password: v.optional(v.string()), // Hashed password
+        name: v.optional(v.string()), // Optional display name
+        email: v.optional(v.string()), // Optional, never required
+        imageUrl: v.optional(v.string()),
+        isAdmin: v.boolean(), // true = "admin" role, false = "user" role
+        role: v.optional(v.union(v.literal("admin"), v.literal("moderator"), v.literal("user"))), // Optional for backward compatibility
+        createdAt: v.number(),
         updatedAt: v.optional(v.number()),
-        image: v.optional(v.string()),
-        username: v.optional(v.string()), // Added back as optional to handle existing data
+        // --- Reputation & Badges ---
+        reputation: v.optional(v.number()), // Cumulative reputation score
+        badges: v.optional(v.array(v.string())), // e.g. ["contributor", "trusted_member", "verified", "top_contributor"]
+        badgesGrantedAt: v.optional(v.array(v.number())), // Parallel array of timestamps when each badge was granted
+        // --- Moderation ---
+        suspended: v.optional(v.boolean()),
+        suspendedAt: v.optional(v.number()),
+        suspendedBy: v.optional(v.id("users")),
+        suspendReason: v.optional(v.string()),
+        // --- Sound Settings ---
+        soundSettings: v.optional(v.object({
+            enabled: v.boolean(),
+            mode: v.union(v.literal("always"), v.literal("smart")),
+            volume: v.number(), // 0-100
+            muteUntil: v.optional(v.number()), // Timestamp
+        })),
     })
-        .index("by_authSubject", ["authSubject"])
-        .index("by_email", ["email"]),
+        .index("by_username", ["username"])
+        .index("by_email", ["email"])
+        .index("by_role", ["role"])
+        .index("by_isAdmin", ["isAdmin"])
+        .index("by_authSubject", ["authSubject"]),
+
+    sessions: defineTable({
+        userId: v.id("users"),
+        expiresAt: v.number(),
+    }),
 
     channels: defineTable({
         name: v.string(),
         description: v.optional(v.string()),
-        type: v.union(v.literal("public"), v.literal("private")),
-        creatorId: v.optional(v.id("users")),
-        isLocked: v.optional(v.boolean()),
-        createdAt: v.optional(v.number()),
-    }).index("name", ["name"]),
+        type: v.optional(v.union(v.literal("chat"), v.literal("money_request"), v.literal("announcement"))),
+        // Lock fields
+        locked: v.optional(v.boolean()),
+        lockedBy: v.optional(v.id("users")),
+        lockedAt: v.optional(v.number()),
+        lockReason: v.optional(v.string()),
+        createdBy: v.id("users"),
+        createdAt: v.number(),
+        memberCount: v.optional(v.number()), // Denormalized count for performance
+        slug: v.optional(v.string()), // URL-friendly name
+        updatedAt: v.optional(v.number()),
+        updatedBy: v.optional(v.id("users")),
+        // Activity Tracking for Sounds
+        lastMessageId: v.optional(v.id("messages")),
+        lastMessageTime: v.optional(v.number()),
+        lastSenderId: v.optional(v.id("users")),
+    }).index("by_name", ["name"]).index("by_slug", ["slug"]),
+
+    channel_members: defineTable({
+        channelId: v.id("channels"),
+        userId: v.id("users"),
+        joinedAt: v.number(),
+    })
+        .index("by_channelId", ["channelId"])
+        .index("by_userId", ["userId"])
+        .index("by_channelId_userId", ["channelId", "userId"]),
 
     messages: defineTable({
         channelId: v.id("channels"),
         userId: v.id("users"),
-        body: v.string(), // "content" requested, mapping to "body" for consistency or should I change to content?
-        // User requested "content". I will use "body" and alias if needed, BUT "content" is better if requested.
-        // Actually, earlier code uses "body". I'll use "body" to avoid breaking existing frontend too much, 
-        // OR create "content" and update msg.ts?
-        // Let's stick to "body" as content.
-        format: v.optional(v.union(v.literal("text"), v.literal("image"))),
-        updatedAt: v.optional(v.number()),
+        content: v.string(),
+        timestamp: v.number(),
+        edited: v.boolean(),
+        editedAt: v.optional(v.number()),
+        // Attachments
+        image: v.optional(v.id("_storage")),
+        // Document attachments (PDF, Word, Excel, etc.)
+        document: v.optional(v.id("_storage")),
+        documentName: v.optional(v.string()),
+        documentType: v.optional(v.string()),
+        // Poll integration
+        type: v.optional(v.union(v.literal("text"), v.literal("poll"))),
+        pollId: v.optional(v.id("polls")),
+        // Threading
+        parentMessageId: v.optional(v.id("messages")),
+        replyCount: v.optional(v.number()),
+        lastReplyAt: v.optional(v.number()),
+        // Moderation (soft-delete)
         deletedAt: v.optional(v.number()),
         deletedBy: v.optional(v.id("users")),
-    }).index("channelId", ["channelId"]),
+        deleteReason: v.optional(v.string()),
+        readCount: v.optional(v.number()), // Denormalized count for announcements
+    })
+        .index("by_channelId", ["channelId"])
+        .index("by_userId", ["userId"]) // Added for bulk deletion performance
+        .index("by_parentMessageId", ["parentMessageId"]),
+
+    message_reactions: defineTable({
+        messageId: v.id("messages"),
+        userId: v.id("users"),
+        emoji: v.string(),
+    })
+        .index("by_messageId", ["messageId"])
+        .index("by_user_message_emoji", ["userId", "messageId", "emoji"]),
+
+    // --- Polls ---
+
+    polls: defineTable({
+        channelId: v.id("channels"),
+        createdBy: v.id("users"),
+        question: v.string(),
+        options: v.array(v.string()),
+        allowMultiple: v.boolean(),
+        anonymous: v.boolean(),
+        allowChangeVote: v.boolean(),
+        status: v.union(
+            v.literal("active"),
+            v.literal("closed"),
+            v.literal("scheduled"),
+            v.literal("no_participation")
+        ),
+        endsAt: v.optional(v.number()),
+        scheduledFor: v.optional(v.number()),
+        hideResultsBeforeClose: v.optional(v.boolean()),
+        isAnnouncement: v.optional(v.boolean()),
+        createdAt: v.number(),
+        updatedAt: v.number(),
+    })
+        .index("by_channelId", ["channelId"])
+        .index("by_status", ["status"]),
+
+    pollVotes: defineTable({
+        pollId: v.id("polls"),
+        userId: v.id("users"),
+        optionIndexes: v.array(v.number()),
+        createdAt: v.number(),
+        updatedAt: v.number(),
+    })
+        .index("by_pollId", ["pollId"])
+        .index("by_pollId_userId", ["pollId", "userId"]),
+
+    // --- Notifications ---
+
+    notifications: defineTable({
+        userId: v.id("users"),
+        channelId: v.optional(v.id("channels")),
+        type: v.union(
+            v.literal("poll_created"),
+            v.literal("poll_closed"),
+            v.literal("poll_ending_soon"),
+            v.literal("announcement")
+        ),
+        message: v.string(),
+        pollId: v.optional(v.id("polls")),
+        read: v.boolean(),
+        createdAt: v.number(),
+    })
+        .index("by_userId", ["userId"])
+        .index("by_userId_read", ["userId", "read"]),
+
+    // --- Channel Lock History (Audit) ---
+
+    channelLockHistory: defineTable({
+        channelId: v.id("channels"),
+        action: v.union(v.literal("locked"), v.literal("unlocked")),
+        actorId: v.id("users"),
+        reason: v.optional(v.string()),
+        timestamp: v.number(),
+    }).index("by_channelId", ["channelId"]),
+
+    // --- Exchange Rates ---
+
+    exchangeRates: defineTable({
+        base: v.literal("USD"),
+        quote: v.literal("TTD"),
+        rate: v.number(),
+        updatedBy: v.id("users"),
+        updatedAt: v.number(),
+        note: v.optional(v.string()),
+    }),
+
+    exchangeRateHistory: defineTable({
+        base: v.literal("USD"),
+        quote: v.literal("TTD"),
+        oldRate: v.number(),
+        newRate: v.number(),
+        updatedBy: v.id("users"),
+        updatedAt: v.number(),
+        note: v.optional(v.string()),
+    }),
+
+    moneyRequests: defineTable({
+        channelId: v.id("channels"),
+        requesterId: v.id("users"),
+        recipientId: v.optional(v.id("users")),
+        amount: v.number(),
+        currency: v.union(v.literal("USD"), v.literal("TTD")),
+        note: v.optional(v.string()),
+        dueDate: v.optional(v.number()),
+        status: v.union(
+            v.literal("pending"),
+            v.literal("accepted"),
+            v.literal("declined"),
+            v.literal("cancelled"),
+            v.literal("expired"),
+            v.literal("paid")
+        ),
+        rateLocked: v.number(),
+        convertedAmount: v.number(),
+        convertedCurrency: v.union(v.literal("USD"), v.literal("TTD")),
+        createdAt: v.number(),
+        updatedAt: v.number(),
+    }).index("by_channelId", ["channelId"]),
+
+    moneyRequestActivity: defineTable({
+        requestId: v.id("moneyRequests"),
+        action: v.union(
+            v.literal("created"),
+            v.literal("accepted"),
+            v.literal("declined"),
+            v.literal("cancelled"),
+            v.literal("marked_paid"),
+            v.literal("expired")
+        ),
+        actorId: v.id("users"),
+        timestamp: v.number(),
+    }).index("by_requestId", ["requestId"]),
+
+    // --- Announcement Reads (Mark as Read / Acknowledgment) ---
+
+    announcement_reads: defineTable({
+        messageId: v.id("messages"),
+        userId: v.id("users"),
+        readAt: v.number(),
+        channelId: v.optional(v.id("channels")), // Added for efficient filtering
+    })
+        .index("by_messageId", ["messageId"])
+        .index("by_messageId_userId", ["messageId", "userId"])
+        .index("by_channelId_userId", ["channelId", "userId"]) // New index
+        .index("by_userId", ["userId"]),
+
+    // --- Moderation Log (Audit Trail) ---
+
+    moderation_log: defineTable({
+        action: v.union(
+            v.literal("user_suspended"),
+            v.literal("user_unsuspended"),
+            v.literal("message_deleted"),
+            v.literal("messages_bulk_deleted"),
+            v.literal("user_role_changed"),
+            v.literal("channel_locked"),
+            v.literal("channel_unlocked"),
+            v.literal("badge_granted"),
+            v.literal("badge_revoked"),
+            v.literal("channel_member_removed")
+        ),
+        actorId: v.id("users"), // Admin who performed the action
+        targetUserId: v.optional(v.id("users")), // User affected
+        targetMessageId: v.optional(v.id("messages")), // Message affected
+        targetChannelId: v.optional(v.id("channels")), // Channel affected
+        reason: v.optional(v.string()),
+        metadata: v.optional(v.string()), // JSON string for extra context
+        timestamp: v.number(),
+    })
+        .index("by_timestamp", ["timestamp"])
+        .index("by_actorId", ["actorId"])
+        .index("by_targetUserId", ["targetUserId"]),
+
+    // --- Channel Access Codes (One-Time Password) ---
+
+    channel_access_codes: defineTable({
+        code: v.string(), // Hashed code
+        channelId: v.id("channels"),
+        targetUserId: v.id("users"),
+        createdBy: v.id("users"),
+        createdAt: v.number(),
+        used: v.boolean(),
+        expiresAt: v.optional(v.number()),
+    })
+        .index("by_code", ["code"])
+        .index("by_channelId", ["channelId"])
+        .index("by_targetUserId", ["targetUserId"]),
+
+    // --- Channel Lock Overrides (Exceptions) ---
+
+    channel_lock_overrides: defineTable({
+        channelId: v.id("channels"),
+        userId: v.id("users"),
+        grantedAt: v.number(),
+        grantedBy: v.id("users"),
+    })
+        .index("by_channelId_userId", ["channelId", "userId"])
+        .index("by_userId", ["userId"]),
+
+    user_thread_activity: defineTable({
+        userId: v.id("users"),
+        parentMessageId: v.id("messages"),
+        lastViewedAt: v.number(),
+    }).index("by_user_thread", ["userId", "parentMessageId"]),
+
+    // --- Admin Notifications & Mutes ---
+
+    channelNotificationMutes: defineTable({
+        channelId: v.id("channels"),
+        mutedBy: v.id("users"), // Admin who muted it
+        muteUntil: v.number(), // Timestamp in ms
+        createdAt: v.number(),
+    })
+        .index("by_channelId_mutedBy", ["channelId", "mutedBy"])
+        .index("by_mutedBy", ["mutedBy"]),
+
+    adminNotifications: defineTable({
+        adminId: v.id("users"),
+        channelId: v.id("channels"),
+        messageId: v.id("messages"),
+        senderId: v.id("users"),
+        preview: v.string(),
+        createdAt: v.number(),
+        read: v.boolean(),
+    })
+        .index("by_adminId", ["adminId"])
+        .index("by_adminId_read", ["adminId", "read"]),
 });

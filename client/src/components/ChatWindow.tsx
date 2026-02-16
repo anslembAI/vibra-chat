@@ -19,8 +19,8 @@ export function ChatWindow({ username, room, currentUser }: ChatProps) {
         if (currentMessage !== "") {
             await sendMessageMutation({
                 channelName: room,
-                body: currentMessage,
-                format: "text",
+                content: currentMessage,
+                type: "text",
             });
             setCurrentMessage("");
         }
@@ -76,7 +76,7 @@ export function ChatWindow({ username, room, currentUser }: ChatProps) {
                                             ? "bg-purple-600/20 border border-purple-500/30 text-white rounded-tr-none"
                                             : "bg-[#282830] text-gray-200 rounded-tl-none border border-white/5"
                                             }`}>
-                                            {msg.body}
+                                            {msg.content}
                                         </div>
                                         <span className="text-xs text-gray-500 mt-1 px-1">{msg.time}</span>
                                     </div>
